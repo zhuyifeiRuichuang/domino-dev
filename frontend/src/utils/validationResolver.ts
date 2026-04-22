@@ -1,5 +1,5 @@
-import { type FieldErrors, type FieldValues } from "react-hook-form";
-import { type ObjectSchema, ValidationError } from "yup";
+import { type FieldErrors, type FieldValues, type Resolver } from "react-hook-form";
+import { type ObjectSchema, type ValidationError } from "yup";
 
 const isNullOrUndefined = (value: unknown): value is null | undefined =>
   value == null;
@@ -63,15 +63,17 @@ const toNestError = <TFieldValues extends FieldValues>(
 };
 
 export const yupResolver =
-  (validationSchema: ObjectSchema<Record<string, any>>) =>
-  async (data: any) => {
+  <TFieldValues extends FieldValues>(
+    validationSchema: ObjectSchema<TFieldValues>,
+  ): Resolver<TFieldValues> =>
+  async (data) => {
     try {
       const values = await validationSchema.validate(data, {
         abortEarly: false,
       });
 
       return {
-        values,
+        values: values as TFieldValues,
         errors: {},
       };
     } catch (e) {
@@ -89,8 +91,8 @@ export const yupResolver =
         }, {});
 
         return {
-          values: {},
-          errors: toNestError(errors),
+          values: {} as TFieldValues,
+          errors: toNestError<TFieldValues>(errors),
         };
       }
 

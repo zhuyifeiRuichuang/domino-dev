@@ -1,5 +1,5 @@
 import { Button, type ButtonProps } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 
 interface Props extends ButtonProps {
@@ -7,15 +7,14 @@ interface Props extends ButtonProps {
 }
 
 export const DownloadAsPDF: React.FC<Props> = ({ contentId, ...props }) => {
-  const [content, setContent] = useState<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLElement | null>(null);
+
   const handlePrint = useReactToPrint({
-    content: () => content,
+    contentRef,
   });
 
   useEffect(() => {
-    // Fetch the content element using the contentId
-    const newContent = document.getElementById(contentId);
-    setContent(newContent);
+    contentRef.current = document.getElementById(contentId);
   }, [contentId]);
 
   const handlePrintWithTimeout = () => {

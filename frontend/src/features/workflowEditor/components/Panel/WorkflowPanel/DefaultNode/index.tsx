@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { Paper, Typography, useTheme } from "@mui/material";
+import { Paper, Typography, useTheme, type SxProps, type Theme } from "@mui/material";
 import { type CSSProperties, memo, useMemo } from "react";
 import { Handle, Position } from "reactflow";
 import { getUuidSlice, useMouseProximity } from "utils";
@@ -66,7 +66,7 @@ export const CustomNode = memo<DefaultNodeProps>(({ id, data, selected }) => {
     [],
   );
 
-  const nodeStyle = useMemo<CSSProperties>(() => {
+  const nodeStyle = useMemo<SxProps<Theme>>(() => {
     return {
       ...data.style.nodeStyle,
       display: "flex",
@@ -98,7 +98,7 @@ export const CustomNode = memo<DefaultNodeProps>(({ id, data, selected }) => {
         backgroundColor: theme.palette.error.light,
         color: theme.palette.error.contrastText,
       }),
-    } satisfies CSSProperties;
+    };
   }, [data, selected]);
 
   const { sourcePosition, targetPosition } = useMemo(

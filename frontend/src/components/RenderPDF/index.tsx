@@ -37,7 +37,7 @@ export const RenderPDF: React.FC<Props> = (props) => {
   return (
     <Document
       file={file}
-      onLoadSuccess={onDocumentLoadSuccess}
+      onLoadSuccess={onDocumentLoadSuccess as any}
       options={options}
     >
       {Array.from(new Array(numPages), (el, index) => (

@@ -1,6 +1,6 @@
 /* eslint-disable no-prototype-builtins */
 import { Icon } from "@iconify/react";
-import { Paper, Typography, useTheme } from "@mui/material";
+import { Paper, Typography, useTheme, type SxProps, type Theme } from "@mui/material";
 import { taskState } from "features/myWorkflows/types";
 import React, { type CSSProperties, memo, useCallback, useMemo } from "react";
 import { Position, Handle } from "reactflow";
@@ -92,7 +92,7 @@ const RunNode = memo<RunNodeProps>(({ id, data, selected }) => {
     return colors;
   }, []);
 
-  const nodeStyle = useMemo<CSSProperties>(() => {
+  const nodeStyle = useMemo<SxProps<Theme>>(() => {
     return {
       ...data.style.nodeStyle,
       display: "flex",

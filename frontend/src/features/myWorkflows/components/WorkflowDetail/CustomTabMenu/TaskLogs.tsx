@@ -4,8 +4,10 @@ import {
   FormGroup,
   Typography,
   Box,
+  type SxProps,
+  type Theme,
 } from "@mui/material";
-import { useState, useMemo, type CSSProperties } from "react";
+import { useState, useMemo } from "react";
 
 interface ITaskLogsProps {
   logs: string[];
@@ -27,7 +29,7 @@ export const TaskLogs = ({ logs }: ITaskLogsProps) => {
     return logs.length ? logs.join("\n") : "No logs available";
   }, [logs]);
 
-  const textareaStyle: CSSProperties = useMemo(() => {
+  const textareaStyle: SxProps<Theme> = useMemo(() => {
     return {
       width: "100%",
       height: "100%",
