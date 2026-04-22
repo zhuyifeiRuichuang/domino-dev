@@ -149,7 +149,9 @@ class PieceRepositoryService(object):
             source=repository.source,
             path=repository.path,
             version=piece_repository_data.version
-        )        new_repo = PieceRepository(
+        )
+
+        new_repo = PieceRepository(
             created_at=datetime.utcnow(),
             name=repository_files_metadata['config_toml'].get('repository').get('REPOSITORY_NAME'),
             source=repository.source,
