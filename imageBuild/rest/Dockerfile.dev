@@ -1,0 +1,37 @@
+# =============================================================================
+# Domino REST API 开发镜像（热重载）
+# 基础镜像: python:3.11-slim
+# 用途: 本地开发时，通过 volume 挂载 ./rest/ 目录实现热重载
+# =============================================================================
+
+FROM python:3.11-slim
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino REST API dev image — hot-reload via volume mount"
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        libpq-dev \
+        gcc \
+        git \
+        curl \
+        nano \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+# --reload 开启热重载（需挂载源码目录）
+CMD ["bash", "-c", "alembic upgrade heads && uvicorn main:app --reload --workers 1 --host 0.0.0.0 --port 8000"]

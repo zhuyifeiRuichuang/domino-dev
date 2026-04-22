@@ -1,0 +1,24 @@
+# =============================================================================
+# Domino Frontend 开发镜像（Vite Dev Server 热重载）
+# 基础镜像: node:20-alpine
+# 用途: 本地开发，通过 volume 挂载 ./frontend/ 实现热更新
+# =============================================================================
+
+FROM node:20-alpine
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Frontend dev image — Vite dev server with hot module replacement"
+
+WORKDIR /usr/src/app
+
+RUN corepack enable \
+    && corepack prepare pnpm@latest --activate
+
+# 先安装依赖（compose volume 挂载时 node_modules 需提前创建）
+COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
+RUN pnpm install
+
+EXPOSE 3000
+
+# 开发服务器
+CMD ["pnpm", "debug"]

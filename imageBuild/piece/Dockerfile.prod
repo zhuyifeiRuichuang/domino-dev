@@ -1,0 +1,45 @@
+# =============================================================================
+# Domino Piece 运行时生产镜像（CPU）
+# 基础镜像: python:3.11-slim
+# 用途: 在 Airflow Worker 中以 Pod/容器 形式运行 Domino Piece 任务
+# =============================================================================
+
+FROM python:3.11-slim
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Piece runtime image (CPU) — runs individual Piece tasks in Airflow workers"
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+# 系统依赖（精简）
+RUN apt-get update --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        git \
+        curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Domino 工作目录
+RUN mkdir -p /home/domino/pieces_repository
+
+# 运行数据输出目录
+RUN mkdir -p /home/run_data
+WORKDIR /home/run_data
+RUN chmod -R 777 .
+
+# Airflow XCom sidecar 通信目录
+RUN mkdir -p /airflow/xcom/
+RUN echo "{}" > /airflow/xcom/return.json
+WORKDIR /airflow/xcom
+RUN chmod -R 777 .
+
+# 安装 domino-py（从 PyPI）
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir "domino-py[cli]"
+
+# 创建非 root 用户运行（可选，视 Piece 是否需要写文件决定）
+# 若 Piece 需要写 /home/run_data，可保持 root 或使用 chmod 777
+
+WORKDIR /home

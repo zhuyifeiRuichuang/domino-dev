@@ -1,0 +1,36 @@
+# =============================================================================
+# Domino Airflow 生产镜像
+# 基础镜像: apache/airflow:2.9.3-python3.11
+# 用途: airflow-webserver, airflow-scheduler, airflow-worker, airflow-triggerer
+# =============================================================================
+
+# 使用官方 Airflow 镜像，固定版本以保证可重现构建
+# 升级至 2.9.x：支持最新调度 timetable API，兼容 domino extract_schedule()
+FROM apache/airflow:2.9.3-python3.11
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Airflow production image with domino-py[airflow] installed"
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# 禁用 pip 版本检查以加快构建速度
+ENV PIP_NO_COLOR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 以 root 身份安装系统依赖（保持最小化）
+USER root
+RUN apt-get update --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        # git 用于 SSH key / clone 操作
+        git \
+        # curl 用于健康检查
+        curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 切回 airflow 用户安装 Python 依赖（安全最佳实践）
+USER airflow
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir "domino-py[airflow]"
+
+WORKDIR /opt/airflow

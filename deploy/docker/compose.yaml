@@ -1,0 +1,332 @@
+# =============================================================================
+# Domino — 完整生产环境 Docker Compose
+# 包含服务: domino-rest, domino-frontend, domino-postgres,
+#           airflow-postgres, redis, airflow-webserver, airflow-scheduler,
+#           airflow-worker, airflow-triggerer, airflow-init, docker-proxy
+#
+# 快速启动:
+#   cp .env.example .env && vim .env     # 修改密码等敏感配置
+#   docker compose up -d
+#
+# 停止并清理数据:
+#   docker compose down -v
+# =============================================================================
+
+# 使用最新 Compose 规范，无需 version 字段
+# （version 字段已在 Compose Spec v2+ 中废弃）
+
+# ── 共享 Airflow 环境变量（YAML 锚点）───────────────────────────────────────
+x-airflow-common:
+  &airflow-common
+  image: domino-airflow:latest
+  build:
+    context: ../..
+    dockerfile: imageBuild/airflow/Dockerfile.prod
+  restart: unless-stopped
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-postgres/${AIRFLOW_DB_NAME:-airflow}
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-postgres/${AIRFLOW_DB_NAME:-airflow}
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-postgres/${AIRFLOW_DB_NAME:-airflow}
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:?AIRFLOW__CORE__FERNET_KEY is required}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
+    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 15
+    # Domino 部署模式
+    DOMINO_DEPLOY_MODE: ${DOMINO_DEPLOY_MODE:-docker-compose}
+  volumes:
+    - airflow-dags:/opt/airflow/dags
+    - airflow-logs:/opt/airflow/logs
+    - airflow-plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    airflow-postgres:
+      condition: service_healthy
+
+services:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Domino 专用 PostgreSQL（独立于 Airflow 数据库）
+  # ────────────────────────────────────────────────────────────────────────────
+  domino-postgres:
+    image: postgres:16-alpine
+    container_name: domino-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DOMINO_DB_NAME:-domino}
+      POSTGRES_USER: ${DOMINO_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DOMINO_DB_PASSWORD:?DOMINO_DB_PASSWORD is required}
+    volumes:
+      - domino-postgres-data:/var/lib/postgresql/data
+    networks:
+      - domino-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${DOMINO_DB_NAME:-domino} -U ${DOMINO_DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "5433:5432"  # 暴露给宿主机调试用，生产可移除
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow 专用 PostgreSQL
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-postgres:
+    image: postgres:16-alpine
+    container_name: airflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:?AIRFLOW_DB_PASSWORD is required}
+    volumes:
+      - airflow-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${AIRFLOW_DB_NAME:-airflow} -U ${AIRFLOW_DB_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Airflow 内部通信，不对外暴露
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Redis（Celery Broker）
+  # ────────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: domino-redis
+    restart: unless-stopped
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Domino REST API
+  # ────────────────────────────────────────────────────────────────────────────
+  domino-rest:
+    image: domino-rest:latest
+    build:
+      context: ../../rest
+      dockerfile: ../imageBuild/rest/Dockerfile.prod
+    container_name: domino-rest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # 数据库
+      DOMINO_DB_USER: ${DOMINO_DB_USER:-postgres}
+      DOMINO_DB_PASSWORD: ${DOMINO_DB_PASSWORD:?}
+      DOMINO_DB_HOST: domino-postgres
+      DOMINO_DB_PORT: 5432
+      DOMINO_DB_NAME: ${DOMINO_DB_NAME:-domino}
+      # 部署模式
+      DOMINO_DEPLOY_MODE: ${DOMINO_DEPLOY_MODE:-docker-compose}
+      DOMINO_WORKFLOW_STORAGE_MODE: ${DOMINO_WORKFLOW_STORAGE_MODE:-local}
+      # Git 平台（可选）
+      DOMINO_WORKFLOWS_GIT_REPO_URL: ${DOMINO_WORKFLOWS_GIT_REPO_URL:-}
+      DOMINO_WORKFLOWS_GIT_REPO_BRANCH: ${DOMINO_WORKFLOWS_GIT_REPO_BRANCH:-main}
+      DOMINO_WORKFLOWS_GIT_TOKEN: ${DOMINO_WORKFLOWS_GIT_TOKEN:-}
+      # Airflow 对接
+      AIRFLOW_WEBSERVER_HOST: http://airflow-webserver:8080
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-airflow}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?}
+      # 安全密钥
+      GIT_TOKEN_SECRET_KEY: ${GIT_TOKEN_SECRET_KEY:-j1DsRJ-ehxU_3PbXW0c_-U4nTOx3knRB4zzWguMVaio=}
+      CREATE_DEFAULT_USER: ${CREATE_DEFAULT_USER:-true}
+      # 默认 Pieces 仓库（可选）
+      DOMINO_DEFAULT_PIECES_REPOSITORY_VERSION: ${DOMINO_DEFAULT_PIECES_REPOSITORY_VERSION:-}
+      DOMINO_DEFAULT_PIECES_REPOSITORY_TOKEN: ${DOMINO_DEFAULT_PIECES_REPOSITORY_TOKEN:-}
+    networks:
+      - domino-internal
+      - default
+    volumes:
+      # 本地存储模式：共享 DAG 目录
+      - airflow-dags:/opt/airflow/dags
+    depends_on:
+      domino-postgres:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_healthy
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Domino Frontend
+  # ────────────────────────────────────────────────────────────────────────────
+  domino-frontend:
+    image: domino-frontend:latest
+    build:
+      context: ../../frontend
+      dockerfile: ../imageBuild/frontend/Dockerfile.prod
+    container_name: domino-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      API_URL: ${API_URL:-http://localhost:8000}
+    depends_on:
+      - domino-rest
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow — 初始化（数据库迁移 + 创建管理员，仅运行一次）
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    restart: no
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        echo "=== Airflow Init: checking resources ==="
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        if (( mem_available < 4000 )); then
+          echo "WARNING: Less than 4GB RAM available ($${mem_available}MB). Airflow may be unstable."
+        fi
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins}
+        exec /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?}
+    user: "0:0"
+    volumes:
+      - airflow-dags:/sources/dags
+      - airflow-logs:/sources/logs
+      - airflow-plugins:/sources/plugins
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow Webserver
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow Scheduler（集成 Domino）
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow Worker（Celery）
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-worker:
+    <<: *airflow-common
+    container_name: airflow-worker
+    command: celery worker
+    restart: unless-stopped
+    environment:
+      <<: *airflow-common-env
+      # 确保 Celery worker 可以干净地接收 SIGTERM
+      DUMB_INIT_SETSID: "0"
+      LOCAL_DOMINO_SHARED_DATA_PATH: /home/shared_storage
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app airflow.executors.celery_executor.app inspect ping -d \"celery@$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - airflow-dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+      - airflow-plugins:/opt/airflow/plugins
+      - domino-shared-data:/home/shared_storage
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Airflow Triggerer（Deferrable Operators 支持）
+  # ────────────────────────────────────────────────────────────────────────────
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Docker Socket Proxy（Domino Piece 运行时创建容器所需）
+  # 注意：仅暴露必要的 Docker API，不暴露全部 socket
+  # ────────────────────────────────────────────────────────────────────────────
+  docker-proxy:
+    image: alpine/socat:latest
+    container_name: domino-docker-proxy
+    restart: unless-stopped
+    command: "TCP4-LISTEN:2375,fork,reuseaddr UNIX-CONNECT:/var/run/docker.sock"
+    ports:
+      - "2376:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+# ── 持久化卷 ──────────────────────────────────────────────────────────────────
+volumes:
+  domino-postgres-data:
+    driver: local
+  airflow-postgres-data:
+    driver: local
+  airflow-dags:
+    driver: local
+  airflow-logs:
+    driver: local
+  airflow-plugins:
+    driver: local
+  domino-shared-data:
+    driver: local
+
+# ── 网络 ──────────────────────────────────────────────────────────────────────
+networks:
+  domino-internal:
+    driver: bridge
+  default:
+    driver: bridge

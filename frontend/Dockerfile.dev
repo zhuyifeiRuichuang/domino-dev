@@ -1,0 +1,23 @@
+# Install pnpm
+FROM node:18-alpine as base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+# Build Stage
+FROM base as build
+WORKDIR /usr/src/app
+COPY package.json pnpm-lock.yaml ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+
+# Debug Stage
+FROM base as debug
+WORKDIR /usr/src/app
+EXPOSE 9222
+
+# Final Stage
+FROM base
+WORKDIR /usr/src/app
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY . .
+CMD ["pnpm", "run", "debug"]

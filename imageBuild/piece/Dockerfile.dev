@@ -1,0 +1,39 @@
+# =============================================================================
+# Domino Piece 运行时开发镜像（CPU）
+# 基础镜像: python:3.11-slim
+# 用途: 本地开发时以可编辑模式安装 domino-py，便于调试 Piece 逻辑
+# =============================================================================
+
+FROM python:3.11-slim
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Piece runtime dev image — editable install from local source"
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        git curl nano \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /home/domino/pieces_repository
+RUN mkdir -p /home/run_data
+WORKDIR /home/run_data
+RUN chmod -R 777 .
+
+RUN mkdir -p /airflow/xcom/
+RUN echo "{}" > /airflow/xcom/return.json
+WORKDIR /airflow/xcom
+RUN chmod -R 777 .
+
+# 可编辑安装（源码从 compose volume 挂载）
+RUN mkdir -p /home/domino/domino_py
+COPY pyproject.toml /home/domino/domino_py/
+COPY src/domino /home/domino/domino_py/src/domino
+WORKDIR /home/domino/domino_py
+RUN chmod -R 777 .
+RUN pip install --no-cache-dir -e ".[cli]"
+
+WORKDIR /home

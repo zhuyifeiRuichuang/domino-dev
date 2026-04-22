@@ -1,0 +1,49 @@
+# =============================================================================
+# Domino REST API 生产镜像
+# 基础镜像: python:3.11-slim
+# 用途: domino-rest 服务（FastAPI + Uvicorn）
+# =============================================================================
+
+FROM python:3.11-slim
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino REST API server — FastAPI application served by Uvicorn"
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# 安装系统依赖（最小化）
+RUN apt-get update --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        # libpq-dev: psycopg2 编译依赖
+        libpq-dev \
+        gcc \
+        # git: workspace git 操作
+        git \
+        curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 先复制 requirements 利用 Docker 层缓存
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY . .
+
+# 创建非 root 用户运行服务（安全加固）
+RUN groupadd --system appgroup \
+    && useradd --system --gid appgroup --no-create-home appuser \
+    && chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8000
+
+# 启动时先执行数据库迁移再启动服务器
+CMD ["bash", "-c", "alembic upgrade heads && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2"]

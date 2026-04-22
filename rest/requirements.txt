@@ -1,0 +1,47 @@
+# Domino REST API dependencies
+# Last updated: 2026-04
+
+# Database
+alembic==1.13.1
+psycopg2-binary==2.9.9
+SQLAlchemy==1.4.52
+SQLAlchemy-JSONField==1.0.2
+SQLAlchemy-Utils==0.41.2
+
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Pydantic
+pydantic[email]==2.7.1
+pydantic-settings==2.3.0
+
+# Templating
+# Jinja2 2.11.x has CVE-2020-28493; MarkupSafe 2.0.x has CVE-2021-23727
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+
+# Auth / encryption
+# bcrypt 3.x / passlib 1.7.4 are compatible; newer bcrypt needs passlib >=1.7.4
+bcrypt==4.1.3
+passlib==1.7.4
+PyJWT==2.8.0
+cryptography==42.0.7
+
+# YAML / TOML
+PyYAML==6.0.1
+tomli==2.0.1
+tomli_w==1.0.0
+
+# HTTP clients
+# aiohttp 3.8.x has several CVEs; upgrade to 3.9+
+aiohttp==3.9.5
+requests==2.32.3
+
+# Misc
+pytzdata==2020.1
+
+# NOTE: PyGithub is no longer a direct dependency.
+# The new generic git_client.py uses the standard `requests` library.
+# If you still need PyGithub for other integrations, pin it here:
+# PyGithub==2.3.0

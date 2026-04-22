@@ -1,0 +1,54 @@
+# =============================================================================
+# Domino Piece 运行时 GPU 开发镜像
+# 基础镜像: nvidia/cuda:12.3.1-base-ubuntu22.04
+# 用途: GPU Piece 本地开发，可编辑安装 domino-py
+# =============================================================================
+
+FROM nvidia/cuda:12.3.1-base-ubuntu22.04
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Piece GPU dev image — CUDA 12.3, editable domino-py install"
+
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update --yes --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        software-properties-common \
+        build-essential \
+        apt-utils \
+        git curl nano \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN add-apt-repository --yes ppa:deadsnakes/ppa \
+    && apt-get update --yes --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        python3.11 \
+        python3.11-dev \
+        python3.11-distutils \
+        python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 999 \
+    && update-alternatives --config python3 \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && python -m pip install --upgrade pip
+
+RUN mkdir -p /home/domino/pieces_repository
+RUN mkdir -p /home/run_data
+WORKDIR /home/run_data
+RUN chmod -R 777 .
+
+RUN mkdir -p /airflow/xcom/
+RUN echo "{}" > /airflow/xcom/return.json
+WORKDIR /airflow/xcom
+RUN chmod -R 777 .
+
+RUN mkdir -p /home/domino/domino_py
+COPY pyproject.toml /home/domino/domino_py/
+COPY src/domino /home/domino/domino_py/src/domino
+WORKDIR /home/domino/domino_py
+RUN chmod -R 777 .
+RUN pip install --no-cache-dir -e ".[cli]"
+
+WORKDIR /home

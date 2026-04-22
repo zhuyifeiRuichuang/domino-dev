@@ -1,0 +1,54 @@
+# =============================================================================
+# Domino Piece 运行时 GPU 生产镜像
+# 基础镜像: nvidia/cuda:12.3.1-base-ubuntu22.04
+# 用途: 需要 GPU 加速的 Piece 任务（CUDA 12.3，Python 3.11）
+# =============================================================================
+
+# 升级至 CUDA 12.3（相比旧版 11.8 更稳定，支持 Ampere/Ada 架构）
+FROM nvidia/cuda:12.3.1-base-ubuntu22.04
+
+LABEL maintainer="Domino Team"
+LABEL description="Domino Piece GPU runtime image — CUDA 12.3, Python 3.11"
+
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 系统依赖
+RUN apt-get update --yes --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        software-properties-common \
+        build-essential \
+        apt-utils \
+        git \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Python 3.11
+RUN add-apt-repository --yes ppa:deadsnakes/ppa \
+    && apt-get update --yes --quiet \
+    && apt-get install --yes --quiet --no-install-recommends \
+        python3.11 \
+        python3.11-dev \
+        python3.11-distutils \
+        python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 999 \
+    && update-alternatives --config python3 \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && python -m pip install --upgrade pip
+
+# Domino 目录结构
+RUN mkdir -p /home/domino/pieces_repository
+RUN mkdir -p /home/run_data
+WORKDIR /home/run_data
+RUN chmod -R 777 .
+
+RUN mkdir -p /airflow/xcom/
+RUN echo "{}" > /airflow/xcom/return.json
+WORKDIR /airflow/xcom
+RUN chmod -R 777 .
+
+RUN pip install --no-cache-dir "domino-py[cli]"
+
+WORKDIR /home
