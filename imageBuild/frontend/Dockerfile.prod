@@ -34,7 +34,7 @@ LABEL description="Domino Frontend — production static files served by nginx"
 RUN rm -rf /usr/share/nginx/html/*
 
 # 复制构建产物
-COPY --from=builder /build/dist /usr/share/nginx/html
+COPY --from=builder /build/build /usr/share/nginx/html
 
 # 自定义 nginx 配置（支持 React Router 的 History API）
 RUN printf 'server {\n\
