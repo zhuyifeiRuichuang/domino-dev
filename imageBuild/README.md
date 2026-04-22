@@ -81,10 +81,10 @@ docker build -f imageBuild/airflow/Dockerfile.dev -t domino-airflow:dev .
 
 ```bash
 # 生产镜像
-docker build -f imageBuild/rest/Dockerfile.prod -t domino-rest:latest .
+docker build -f imageBuild/rest/Dockerfile.prod -t zhuyifeiruichuang/domino-rest:prod .
 
 # 开发镜像
-docker build -f imageBuild/rest/Dockerfile.dev -t domino-rest:dev .
+docker build -f imageBuild/rest/Dockerfile.dev -t zhuyifeiruichuang/domino-rest:dev .
 ```
 
 ---

@@ -14,7 +14,8 @@ WORKDIR /build
 # 先安装依赖（利用缓存层）
 # 使用 --no-frozen-lockfile 以兼容 package.json 与 pnpm-lock.yaml 版本不同步的情况；
 # 如需严格锁定版本，请先在本地运行 `pnpm install` 更新 pnpm-lock.yaml 后再构建。
-COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
+# 构建上下文为项目根目录，需要指定 frontend/ 子目录
+COPY frontend/package.json frontend/pnpm-lock.yaml* frontend/package-lock.json* frontend/yarn.lock* ./
 RUN corepack enable \
     && corepack prepare pnpm@latest --activate \
     && pnpm install --no-frozen-lockfile
@@ -24,8 +25,15 @@ RUN npx pkg ./node_modules/@import-meta-env/cli/bin/import-meta-env.js \
     -o import-meta-env -t node18-alpine-x64 -y
 
 # 复制源码并构建
+# 构建上下文为项目根目录，需要指定 frontend/ 子目录
+COPY frontend/src ./src
+COPY frontend/public ./public
+COPY frontend/index.html ./
+COPY frontend/package.json ./
+COPY frontend/vite.config.ts ./
+COPY frontend/tsconfig.json ./
+COPY frontend/scripts ./scripts
 # 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
-COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # 在构建阶段下载工作流示例数据到 public/ 目录
@@ -51,8 +59,8 @@ RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /build/build /usr/share/nginx/html
 COPY --from=builder /build/import-meta-env /usr/share/nginx/html/
 
-# 复制启动脚本
-COPY entrypoint.sh /docker-entrypoint.d/40-import-meta-env.sh
+# 复制启动脚本（构建上下文为项目根目录）
+COPY frontend/entrypoint.sh /docker-entrypoint.d/40-import-meta-env.sh
 RUN chmod +x /docker-entrypoint.d/40-import-meta-env.sh
 
 # 自定义 nginx 配置（支持 React Router 的 History API）
