@@ -47,10 +47,10 @@ imageBuild/
 
 ```bash
 # 生产镜像
-docker build -f imageBuild/airflow/Dockerfile.prod -t domino-airflow:latest .
+docker build -f imageBuild/airflow/Dockerfile.prod -t zhuyifeiruichuang/domino-airflow:prod .
 
 # 开发镜像
-docker build -f imageBuild/airflow/Dockerfile.dev -t domino-airflow:dev .
+docker build -f imageBuild/airflow/Dockerfile.dev -t zhuyifeiruichuang/domino-airflow:dev .
 ```
 
 ---
@@ -66,10 +66,10 @@ docker build -f imageBuild/airflow/Dockerfile.dev -t domino-airflow:dev .
 
 ```bash
 # 生产镜像
-docker build -f ../imageBuild/rest/Dockerfile.prod -t domino-rest:latest .
+docker build -f ../imageBuild/rest/Dockerfile.prod -t zhuyifeiruichuang/domino-rest:prod .
 
 # 开发镜像
-docker build -f ../imageBuild/rest/Dockerfile.dev -t domino-rest:dev .
+docker build -f ../imageBuild/rest/Dockerfile.dev -t zhuyifeiruichuang/domino-rest:dev .
 ```
 
 > **注意：** `COPY` 路径相对于 `rest/` 目录（build context），因此需在 `rest/` 中执行，或在 compose 中指定 `context: ./rest`。
@@ -87,10 +87,10 @@ docker build -f ../imageBuild/rest/Dockerfile.dev -t domino-rest:dev .
 
 ```bash
 # 生产镜像
-docker build -f ../imageBuild/frontend/Dockerfile.prod -t domino-frontend:latest .
+docker build -f ../imageBuild/frontend/Dockerfile.prod -t zhuyifeiruichuang/domino-frontend:prod .
 
 # 开发镜像
-docker build -f ../imageBuild/frontend/Dockerfile.dev -t domino-frontend:dev .
+docker build -f ../imageBuild/frontend/Dockerfile.dev -t zhuyifeiruichuang/domino-frontend:dev .
 ```
 
 **生产镜像特性：**
