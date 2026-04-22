@@ -25,7 +25,7 @@ class BaseAuthorizer():
     user_repository = UserRepository()
     workspace_repository = WorkspaceRepository()
     piece_repository_repository = PieceRepositoryRepository()
-    github_token_fernet = Fernet(settings.GITHUB_TOKEN_SECRET_KEY)
+    github_token_fernet = Fernet(settings.GIT_TOKEN_SECRET_KEY)
 
     @classmethod
     def get_password_hash(cls, password):
