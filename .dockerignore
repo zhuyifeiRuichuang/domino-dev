@@ -1,10 +1,18 @@
 docs/*
-frontend/*
 helm/*
 k8s/*
 misc_files/*
+# rest/ 保留源代码，只排除构建产物
 rest/__pycache__/*
 rest/*.pyc
 rest/.coverage
 rest/htmlcov/
 rest/.pytest_cache/
+# frontend/ 保留源代码，只排除构建产物
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.nuxt/
+frontend/.vite/
+frontend/.turbo/

@@ -100,10 +100,10 @@ docker build -f imageBuild/rest/Dockerfile.dev -t zhuyifeiruichuang/domino-rest:
 
 ```bash
 # 生产镜像
-docker build -f imageBuild/frontend/Dockerfile.prod -t domino-frontend:latest .
+docker build -f imageBuild/frontend/Dockerfile.prod -t zhuyifeiruichuang/domino-frontend:prod .
 
 # 开发镜像
-docker build -f imageBuild/frontend/Dockerfile.dev -t domino-frontend:dev .
+docker build -f imageBuild/frontend/Dockerfile.dev -t zhuyifeiruichuang/domino-frontend:dev .
 ```
 
 **生产镜像特性：**
