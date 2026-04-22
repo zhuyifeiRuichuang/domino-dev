@@ -3,4 +3,8 @@ frontend/*
 helm/*
 k8s/*
 misc_files/*
-rest/*
+rest/__pycache__/*
+rest/*.pyc
+rest/.coverage
+rest/htmlcov/
+rest/.pytest_cache/
