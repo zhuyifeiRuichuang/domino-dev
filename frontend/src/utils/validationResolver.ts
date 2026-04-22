@@ -1,5 +1,5 @@
 import { type FieldErrors, type FieldValues, type Resolver } from "react-hook-form";
-import { type ObjectSchema, type ValidationError } from "yup";
+import { type ObjectSchema, ValidationError } from "yup";
 
 const isNullOrUndefined = (value: unknown): value is null | undefined =>
   value == null;
@@ -62,11 +62,14 @@ const toNestError = <TFieldValues extends FieldValues>(
   return fieldErrors;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const yupResolver =
   <TFieldValues extends FieldValues>(
     validationSchema: ObjectSchema<TFieldValues>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Resolver<TFieldValues> =>
-  async (data) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async (data: any) => {
     try {
       const values = await validationSchema.validate(data, {
         abortEarly: false,
@@ -75,7 +78,7 @@ export const yupResolver =
       return {
         values: values as TFieldValues,
         errors: {},
-      };
+      } as any;
     } catch (e) {
       if (e instanceof ValidationError) {
         const errors = e.inner.reduce((allErrors, currentError) => {
@@ -93,7 +96,7 @@ export const yupResolver =
         return {
           values: {} as TFieldValues,
           errors: toNestError<TFieldValues>(errors),
-        };
+        } as any;
       }
 
       throw new Error("Error trying to validate form schema");

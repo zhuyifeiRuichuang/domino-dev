@@ -62,7 +62,8 @@ export const WorkflowsEditorComponent: React.FC = () => {
 
   const validateWorkflowSettings = useCallback(async (payload: any) => {
     const resolver = yupResolver(WorkflowSettingsFormSchema);
-    const validatedData = await resolver(payload.workflowSettingsData);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const validatedData = await (resolver as any)(payload.workflowSettingsData);
     if (!Object.keys(validatedData.errors).length) {
       // do something
     } else {
@@ -87,7 +88,8 @@ export const WorkflowsEditorComponent: React.FC = () => {
 
       const resolver = yupResolver(validationSchema);
 
-      const validatedData = await resolver(payload.workflowPiecesData);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const validatedData = await (resolver as any)(payload.workflowPiecesData);
 
       if (!Object.keys(validatedData.errors).length) {
         workflowPanelRef?.current?.setNodes((nodes) =>

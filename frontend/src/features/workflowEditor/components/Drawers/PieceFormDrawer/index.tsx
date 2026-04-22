@@ -71,7 +71,7 @@ export const PieceFormDrawer: React.FC<ISidebarPieceFormProps> = (props) => {
 
   const [formLoaded, setFormLoaded] = useState(false);
 
-  const methods = useForm({
+  const methods = useForm<any>({
     resolver,
     mode: "onChange",
   });
@@ -104,7 +104,8 @@ export const PieceFormDrawer: React.FC<ISidebarPieceFormProps> = (props) => {
       });
 
       if (outputSchemaProperty && data?.inputs?.[outputSchemaProperty]?.value) {
-        const formsData = data.inputs[outputSchemaProperty].value;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const formsData = (data.inputs as any)[outputSchemaProperty].value;
         const newProperties = formsData.reduce(
           (
             acc: any,
