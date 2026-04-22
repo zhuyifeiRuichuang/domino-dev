@@ -20,7 +20,9 @@ RUN corepack enable \
     && pnpm install --no-frozen-lockfile
 
 # 复制源码并构建
+# 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
 COPY . .
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm build
 
 # ---- 运行阶段 ----
