@@ -105,55 +105,12 @@ def get_github_token_pieces_from_config_or_env():
     default=get_github_token_workflows_from_env,
     help='Github token for read/write operations on Workflows Repository.'
 )
-@click.option(
-    '--deploy-mode',
-    prompt='Deploy mode',
-    default="local-k8s",
-    help='Deploy mode - either "local" or "remote".'
-)
-@click.option(
-    '--local-pieces-repository-path',
-    prompt='Local pieces repository path. Example: ["/path/to/repo1", "/path/to/"repo2"]',
-    default=[],
-    help='List of local pieces repository paths.',
-)
-@click.option(
-    "--local-domino-path",
-    prompt="Local Domino path",
-    default="",
-    help="Local Domino path. It is used only if dev-mode is set to 'local' and it will allow you to use hot reloading for local Domino.",
-)
-@click.option(
-    '--local-rest-image',
-    prompt='Local Domino REST image to use if local-k8s-dev deploy mode.',
-    default="",
-    help='Local Domino REST image to use if local-k8s-dev deploy mode.',
-)
-@click.option(
-    '--local-frontend-image',
-    prompt='Local Domino Front image to use if local-k8s-dev deploy mode.',
-    default="",
-    help='Local Domino Front image to use if local-k8s-dev deploy mode.',
-)
-@click.option(
-    '--local-airflow-image',
-    prompt='Local Domino Airflow image to use if local-k8s-dev deploy mode.',
-    default="",
-    help='Local Domino Airflow image to use if local-k8s-dev deploy mode.',
-)
 def cli_prepare_platform(
     cluster_name,
     workflows_repository,
     github_workflows_ssh_private_key,
     github_default_pieces_repository_token,
     github_workflows_token,
-    deploy_mode,
-    local_pieces_repository_path,
-    local_domino_path,
-    local_rest_image,
-    local_frontend_image,
-    local_airflow_image
-
 ):
     """Prepare local folder for running a Domino platform."""
     platform.prepare_platform(
@@ -162,12 +119,6 @@ def cli_prepare_platform(
         github_workflows_ssh_private_key=github_workflows_ssh_private_key,
         github_default_pieces_repository_token=github_default_pieces_repository_token,
         github_workflows_token=github_workflows_token,
-        deploy_mode=deploy_mode,
-        local_pieces_repository_path=ast.literal_eval(local_pieces_repository_path),
-        local_domino_path=local_domino_path,
-        local_rest_image=local_rest_image,
-        local_frontend_image=local_frontend_image,
-        local_airflow_image=local_airflow_image
     )
 
 
@@ -203,12 +154,6 @@ def cli_destroy_platform():
     default=False
 )
 @click.option(
-    '--dev',
-    is_flag=True,
-    help="Run platform in dev mode.",
-    default=False
-)
-@click.option(
     '--debug',
     is_flag=True,
     help="Debug mode prints docker compose messages on terminal.",
@@ -226,12 +171,12 @@ def cli_destroy_platform():
     help='Github token for access default pieces repositories.',
     default=get_github_token_pieces_from_config_or_env,
 )
-def cli_run_platform_compose(use_config_file, dev, debug, stop, github_token):
+def cli_run_platform_compose(use_config_file, debug, stop, github_token):
     """Run Domino platform locally with docker compose. Do NOT use this in production."""
     if stop:
         platform.stop_platform_compose()
     else:
-        platform.run_platform_compose(github_token=github_token, use_config_file=use_config_file, dev=dev, debug=debug)
+        platform.run_platform_compose(github_token=github_token, use_config_file=use_config_file, debug=debug)
 
 
 @click.command()

@@ -72,97 +72,13 @@ class DominoKubernetesPodOperator(KubernetesPodOperator):
             updated_container_resources["limits"]["nvidia.com/gpu"] = "1"
         container_resources_obj = k8s.V1ResourceRequirements(**updated_container_resources)
 
-        # Extra volume and volume mounts - for DEV mode only
-        volumes_dev, volume_mounts_dev = None, None
-        if self.deploy_mode == 'local-k8s-dev':
-            volumes_dev, volume_mounts_dev = self._make_volumes_and_volume_mounts_dev()
-
         super().__init__(
             task_id=task_id,
             env_vars=pod_env_vars,
             container_resources=container_resources_obj,
-            volumes=volumes_dev,
-            volume_mounts=volume_mounts_dev,
             **k8s_operator_kwargs
         )
 
-
-    def _make_volumes_and_volume_mounts_dev(self):
-        """
-        Make volumes and volume mounts for the pod when in DEVELOPMENT mode.
-        """
-        config.load_incluster_config()
-        k8s_client = client.CoreV1Api()
-
-        all_volumes = []
-        all_volume_mounts = []
-
-        repository_raw_project_name = str(self.piece_source_image).split('/')[-1].split(':')[0]
-        persistent_volume_claim_name = 'pvc-{}'.format(str(repository_raw_project_name.lower().replace('_', '-')))
-        persistent_volume_name = 'pv-{}'.format(str(repository_raw_project_name.lower().replace('_', '-')))
-
-        pvc_exists = False
-        try:
-            k8s_client.read_namespaced_persistent_volume_claim(name=persistent_volume_claim_name, namespace='default')
-            pvc_exists = True
-        except client.rest.ApiException as e:
-            if e.status != 404:
-                raise e
-
-        pv_exists = False
-        try:
-            k8s_client.read_persistent_volume(name=persistent_volume_name)
-            pv_exists = True
-        except client.rest.ApiException as e:
-            if e.status != 404:
-                raise e
-
-        if pv_exists and pvc_exists:
-            volume_dev_pieces = k8s.V1Volume(
-                name='dev-op-{path_name}'.format(path_name=str(repository_raw_project_name.lower().replace('_', '-'))),
-                persistent_volume_claim=k8s.V1PersistentVolumeClaimVolumeSource(
-                    claim_name=persistent_volume_claim_name
-                ),
-            )
-            volume_mount_dev_pieces = k8s.V1VolumeMount(
-                name='dev-op-{path_name}'.format(path_name=str(repository_raw_project_name.lower().replace('_', '-'))),
-                mount_path=f'/home/domino/pieces_repository',
-                sub_path=None,
-                read_only=True
-            )
-            all_volumes.append(volume_dev_pieces)
-            all_volume_mounts.append(volume_mount_dev_pieces)
-
-        ######################## For local domino-py dev ###############################################
-        domino_package_local_claim_name = 'domino-dev-volume-claim'
-        pvc_exists = False
-        try:
-            k8s_client.read_namespaced_persistent_volume_claim(name=domino_package_local_claim_name, namespace='default')
-            pvc_exists = True
-        except client.rest.ApiException as e:
-            if e.status != 404:
-                raise e
-
-        if pvc_exists:
-            volume_dev = k8s.V1Volume(
-                name='jobs-persistent-storage-dev',
-                persistent_volume_claim=k8s.V1PersistentVolumeClaimVolumeSource(claim_name=domino_package_local_claim_name),
-            )
-            """
-            # TODO
-            Remove deprecated_volume_mount_dev once we have all the pieces repositories updated
-            with the new base pod image
-            """
-            volume_mount_pkg = k8s.V1VolumeMount(
-                name='jobs-persistent-storage-dev',
-                mount_path='/usr/local/lib/python3.10/site-packages/domino/',
-                sub_path=None,
-                read_only=True
-            )
-            all_volumes.append(volume_dev)
-            all_volume_mounts.append(volume_mount_pkg)
-
-        return all_volumes, all_volume_mounts
 
     def build_pod_request_obj(self, context: Optional['Context'] = None) -> k8s.V1Pod:
         """
@@ -173,6 +89,9 @@ class DominoKubernetesPodOperator(KubernetesPodOperator):
         self.task_id_replaced = self.task_id.lower().replace("_", "-") # doing this because airflow doesn't allow underscores and upper case in mount names and max len is 63
         self.shared_storage_base_mount_path = '/home/shared_storage'
 
+        # Only add shared storage for k8s deploy mode
+        if self.deploy_mode != "k8s":
+            return pod
         if not self.workflow_shared_storage or self.workflow_shared_storage.mode.name == 'none':
             return pod
         if self.workflow_shared_storage.source.name in ["aws_s3", "gcs"]:

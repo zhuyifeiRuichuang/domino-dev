@@ -69,6 +69,11 @@ class Task(object):
     def _set_operator(self) -> BaseOperator:
         """
         Set Airflow Operator according to deploy mode and Piece execution mode.
+
+        Supported deploy modes:
+        - host: 直接在宿主机运行 Piece（使用 PythonOperator）
+        - docker-compose: 使用 Docker Compose 部署（使用 DominoDockerOperator）
+        - k8s: Kubernetes 部署（使用 DominoKubernetesPodOperator）
         """
         if self.execution_mode == "worker":
             return DominoWorkerOperator(
@@ -80,28 +85,27 @@ class Task(object):
                 piece_input_kwargs=self.piece_input_kwargs,
             )
 
-        if self.deploy_mode == "local-python":
+        if self.deploy_mode == "host":
+            # Host mode: 直接在宿主机运行 Piece
             return PythonOperator(
                 dag=self.dag,
                 task_id=self.task_id,
-                start_date=datetime(2021, 1, 1), # TODO - get correct start_date
+                start_date=datetime(2021, 1, 1),  # TODO - get correct start_date
                 provide_context=True,
                 op_kwargs=self.piece_input_kwargs,
-                # queue=dependencies_group,
                 make_python_callable_kwargs=dict(
-                    piece_name=self.piece_name,
+                    piece_name=self.piece.get('name'),
                     deploy_mode=self.deploy_mode,
                     task_id=self.task_id,
                     dag_id=self.dag_id,
                 )
             )
 
-        elif self.deploy_mode in ["local-k8s", "local-k8s-dev", "prod", "k8s"]:
+        elif self.deploy_mode == "k8s":
+            # K8s mode: 使用 Kubernetes Pod Operator
             # References:
-            # - https://airflow.apache.org/docs/apache-airflow/1.10.14/_api/airflow/contrib/operators/kubernetes_pod_operator/index.html
             # - https://airflow.apache.org/docs/apache-airflow/stable/templates-ref.html
             # - https://www.astronomer.io/guides/templating/
-            # - good example: https://github.com/apache/airflow/blob/main/tests/system/providers/cncf/kubernetes/example_kubernetes.py
             # - commands HAVE to go in a list object: https://stackoverflow.com/a/55149915/11483674
 
             return DominoKubernetesPodOperator(
@@ -121,16 +125,15 @@ class Task(object):
                 image_pull_policy='IfNotPresent',
                 name=f"airflow-worker-pod-{self.task_id}",
                 startup_timeout_seconds=600,
-                annotations={"sidecar.istio.io/inject": "false"}, # TODO - remove this when istio is working with airflow k8s pod
-                # cmds=["/bin/bash"],
-                # arguments=["-c", "sleep 120;"],
+                annotations={"sidecar.istio.io/inject": "false"},
                 cmds=["domino"],
                 arguments=["run-piece-k8s"],
                 do_xcom_push=True,
                 in_cluster=True,
             )
 
-        elif self.deploy_mode == 'local-compose':
+        elif self.deploy_mode in ["docker-compose", "docker-compose"]:
+            # Docker Compose mode: 使用 Docker Operator
             return DominoDockerOperator(
                 dag_id=self.dag_id,
                 task_id=self.task_id,
@@ -143,7 +146,6 @@ class Task(object):
                 workflow_shared_storage=self.workflow_shared_storage,
                 container_resources=self.container_resources,
                 # ----------------- Docker -----------------
-                # TODO uncoment
                 image=self.piece["source_image"],
                 entrypoint=["domino", "run-piece-docker"],
                 do_xcom_push=True,

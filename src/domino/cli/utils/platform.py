@@ -62,12 +62,6 @@ def prepare_platform(
     github_workflows_ssh_private_key: str,
     github_default_pieces_repository_token: str,
     github_workflows_token: str,
-    deploy_mode: str,
-    local_pieces_repository_path: list,
-    local_domino_path: str,
-    local_rest_image: str,
-    local_frontend_image: str,
-    local_airflow_image: str,
 ) -> None:
     # Create local configuration file updated with user-provided arguments
     config_file_path = Path(__file__).resolve().parent / "config-domino-local.toml"
@@ -77,21 +71,6 @@ def prepare_platform(
     running_path = str(Path().cwd().resolve())
     config_dict["path"]["DOMINO_LOCAL_RUNNING_PATH"] = running_path
     config_dict["kind"]["DOMINO_KIND_CLUSTER_NAME"] = cluster_name
-    config_dict['kind']['DOMINO_DEPLOY_MODE'] = deploy_mode
-
-    if deploy_mode == 'local-k8s-dev':
-        config_dict['dev']['DOMINO_AIRFLOW_IMAGE'] = local_airflow_image
-        config_dict['dev']['DOMINO_REST_IMAGE'] = local_rest_image
-        config_dict['dev']['DOMINO_FRONTEND_IMAGE'] = local_frontend_image
-        config_dict['dev']['DOMINO_LOCAL_DOMINO_PACKAGE'] = local_domino_path
-        for local_pieces_repository in local_pieces_repository_path:
-            # Read repo config.toml to get repo name to map it to cluster path
-            repo_config_file_path = Path(local_pieces_repository).resolve() / "config.toml"
-            with open(str(repo_config_file_path), "rb") as f:
-                repo_toml = tomli.load(f)
-
-            repo_name = repo_toml['repository']['REPOSITORY_NAME']
-            config_dict['dev'][repo_name] = local_pieces_repository
 
     config_dict['github']['DOMINO_GITHUB_WORKFLOWS_REPOSITORY'] = workflows_repository.split("github.com/")[-1].strip('/')
 
@@ -129,35 +108,6 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
             }
         )
     )
-    extra_mounts_local_repositories = []
-
-    domino_dev_private_variables_list = [
-        "DOMINO_LOCAL_DOMINO_PACKAGE",
-        "DOMINO_REST_IMAGE",
-        "DOMINO_FRONTEND_IMAGE",
-        "DOMINO_AIRFLOW_IMAGE"
-    ]
-    local_pieces_respositories = {key: value for key, value in platform_config['dev'].items() if key not in domino_dev_private_variables_list}
-    if platform_config['kind']['DOMINO_DEPLOY_MODE'] == 'local-k8s-dev':
-        for repo_name, repo_path in local_pieces_respositories.items():
-            extra_mounts_local_repositories.append(
-                dict(
-                    hostPath=repo_path,
-                    containerPath=f"/pieces_repositories/{repo_name}",
-                    readOnly=True,
-                    propagation='HostToContainer'
-                )
-            )
-        if platform_config['dev'].get('DOMINO_LOCAL_DOMINO_PACKAGE'):
-            domino_local_package_absolute_path = Path(platform_config['dev']['DOMINO_LOCAL_DOMINO_PACKAGE']).resolve()
-            extra_mounts_local_repositories.append(
-                dict(
-                    hostPath=str(domino_local_package_absolute_path),
-                    containerPath=f"/domino/domino_py/src/domino",
-                    readOnly=True,
-                    propagation='HostToContainer'
-                )
-            )
 
     kubeadm_parsed = AsLiteral(yaml.dump(kubeadm_config_patches))
     use_gpu_dict = {} if not use_gpu else {"gpus": True}
@@ -192,7 +142,6 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
                         readOnly=False,
                         propagation="Bidirectional"
                     ),
-                    *extra_mounts_local_repositories
                 ],
                 **use_gpu_dict
             ),
@@ -232,37 +181,10 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
     console.print("NGINX controller installed successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
     console.print("")
 
-    # Load local images to Kind cluster
-    local_domino_airflow_image = platform_config.get('dev', {}).get('DOMINO_AIRFLOW_IMAGE', None)
-    local_domino_frontend_image = platform_config.get('dev', {}).get('DOMINO_FRONTEND_IMAGE', None)
-    local_domino_rest_image = platform_config.get('dev', {}).get('DOMINO_REST_IMAGE', None)
-
-    domino_airflow_image_tag = 'latest'
     domino_airflow_image = "ghcr.io/tauffer-consulting/domino-airflow-base"
-    if local_domino_airflow_image:
-        console.print(f"Loading local Domino Airflow image {local_domino_airflow_image} to Kind cluster...")
-        subprocess.run(["kind", "load", "docker-image", local_domino_airflow_image , "--name", cluster_name, "--nodes", f"{cluster_name}-worker"])
-        domino_airflow_image = f'docker.io/library/{local_domino_airflow_image}'
-    elif platform_config['kind']["DOMINO_DEPLOY_MODE"] == 'local-k8s-dev' and not local_domino_airflow_image:
-        domino_airflow_image_tag = 'latest-dev'
-
-    if local_domino_frontend_image:
-        console.print(f"Loading local frontend image {local_domino_frontend_image} to Kind cluster...")
-        subprocess.run(["kind", "load", "docker-image", local_domino_frontend_image , "--name", cluster_name, "--nodes", f"{cluster_name}-worker"])
-        domino_frontend_image = f"docker.io/library/{local_domino_frontend_image}"
-    elif platform_config['kind']["DOMINO_DEPLOY_MODE"] == 'local-k8s-dev':
-        domino_frontend_image = "ghcr.io/tauffer-consulting/domino-frontend:k8s-dev"
-    else:
-        domino_frontend_image = "ghcr.io/tauffer-consulting/domino-frontend:k8s"
-
-    if local_domino_rest_image:
-        console.print(f"Loading local REST image {local_domino_rest_image} to Kind cluster...")
-        subprocess.run(["kind", "load", "docker-image", local_domino_rest_image , "--name", cluster_name, "--nodes", f"{cluster_name}-worker"])
-        domino_rest_image = f'docker.io/library/{local_domino_rest_image}'
-    elif platform_config['kind']["DOMINO_DEPLOY_MODE"] == 'local-k8s-dev':
-        domino_rest_image = "ghcr.io/tauffer-consulting/domino-rest:latest-dev"
-    else:
-        domino_rest_image = "ghcr.io/tauffer-consulting/domino-rest:latest"
+    domino_airflow_image_tag = 'latest'
+    domino_frontend_image = "ghcr.io/tauffer-consulting/domino-frontend:k8s"
+    domino_rest_image = "ghcr.io/tauffer-consulting/domino-rest:latest"
 
     # In order to use nvidia gpu in our cluster we need nvidia plugins to be installed.
     # We can use nvidia operator to install nvidia plugins.
@@ -293,8 +215,8 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
         "frontend": {
             "enabled": True,
             "image": domino_frontend_image,
-            "apiEnv": "dev" if platform_config['kind']["DOMINO_DEPLOY_MODE"] in ['local-k8s-dev', 'local-k8s'] else 'prod',
-            "deployMode": platform_config['kind']["DOMINO_DEPLOY_MODE"],
+            "apiEnv": "prod",
+            "deployMode": "k8s",
         },
         "rest": {
             "enabled": True,
@@ -330,43 +252,11 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
     )
     airflow_ssh_config_parsed = AsLiteral(yaml.dump(airflow_ssh_config))
 
-    workers_extra_volumes = []
-    workers_extra_volumes_mounts = []
-    workers = {}
-    scheduler = {}
-    if platform_config['kind']["DOMINO_DEPLOY_MODE"] == 'local-k8s-dev' and platform_config['dev'].get('DOMINO_LOCAL_DOMINO_PACKAGE'):
-        workers_extra_volumes = [
-            {
-                "name": "domino-dev-extra",
-                "persistentVolumeClaim": {
-                    "claimName": "domino-dev-volume-claim"
-                }
-            }
-        ]
-        workers_extra_volumes_mounts = [
-            {
-                "name": "domino-dev-extra",
-                "mountPath": "/opt/airflow/domino/domino_py/src/domino"
-            }
-        ]
-        workers = {
-            "workers": {
-                "extraVolumes": workers_extra_volumes,
-                "extraVolumeMounts": workers_extra_volumes_mounts,
-            }
-        }
-        scheduler = {
-            "scheduler": {
-                "extraVolumes": workers_extra_volumes,
-                "extraVolumeMounts": workers_extra_volumes_mounts,
-            }
-        }
-
     airflow_values_override_config = {
         "env": [
             {
                 "name": "DOMINO_DEPLOY_MODE",
-                "value": platform_config['kind']["DOMINO_DEPLOY_MODE"]
+                "value": "k8s"
             },
         ],
         "images": {
@@ -413,8 +303,6 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
                 "sidecar.istio.io/inject": "false"
             },
         },
-        **workers,
-        **scheduler,
     }
 
     # Update Helm repositories
@@ -438,201 +326,27 @@ def create_platform(install_airflow: bool = True, use_gpu: bool = False) -> None
             subprocess.run(commands)
 
     # Install Domino Helm Chart
-    local_domino_path = platform_config.get('dev', {}).get('DOMINO_LOCAL_DOMINO_PACKAGE')
-    if platform_config.get('kind', {}).get('DOMINO_DEPLOY_MODE') == 'local-k8s-dev' and local_domino_path:
-        console.print('Installing Domino using local helm...')
-        helm_domino_path = Path(local_domino_path).parent.parent / "helm/domino"
+    console.print('Installing Domino using remote helm...')
+    with TemporaryDirectory() as tmp_dir:
+        console.print("Downloading Domino Helm chart...")
+        subprocess.run([
+            "helm",
+            "pull",
+            DOMINO_HELM_PATH,
+            "--untar",
+            "-d",
+            tmp_dir
+        ])
         with NamedTemporaryFile(suffix='.yaml', mode="w") as fp:
             yaml.dump(domino_values_override_config, fp)
+            console.print('Installing Domino...')
             commands = [
                 "helm", "install",
                 "-f", str(fp.name),
                 "domino",
-                helm_domino_path
+                f"{tmp_dir}/domino",
             ]
             subprocess.run(commands)
-    else:
-        console.print('Installing Domino using remote helm...')
-        with TemporaryDirectory() as tmp_dir:
-            console.print("Downloading Domino Helm chart...")
-            subprocess.run([
-                "helm",
-                "pull",
-                DOMINO_HELM_PATH,
-                "--untar",
-                "-d",
-                tmp_dir
-            ])
-            with NamedTemporaryFile(suffix='.yaml', mode="w") as fp:
-                yaml.dump(domino_values_override_config, fp)
-                console.print('Installing Domino...')
-                commands = [
-                    "helm", "install",
-                    "-f", str(fp.name),
-                    "domino",
-                    f"{tmp_dir}/domino",
-                ]
-                subprocess.run(commands)
-
-    # For each path create a pv and pvc
-    if platform_config['kind']['DOMINO_DEPLOY_MODE'] == 'local-k8s-dev':
-        config.load_kube_config()
-        k8s_client = client.CoreV1Api()
-        v1 = client.RbacAuthorizationV1Api()
-
-        # Create service account role binding with admin access for airflow worker
-        role_binding_name_worker = "full-access-user-clusterrolebinding-worker"
-        sa_name = "airflow-worker"
-        cluster_role_binding_worker = client.V1ClusterRoleBinding(
-            metadata=client.V1ObjectMeta(name=role_binding_name_worker),
-            subjects=[
-                client.V1Subject(
-                    kind="ServiceAccount",
-                    name=sa_name,
-                    namespace="default"
-                )
-            ],
-            role_ref=client.V1RoleRef(
-                kind="ClusterRole",
-                name="cluster-admin",
-                api_group="rbac.authorization.k8s.io"
-            )
-        )
-        console.print('Creating RBAC Worker Authorization for local dev')
-        v1.create_cluster_role_binding(cluster_role_binding_worker)
-
-        role_binding_name_scheduler = "full-access-user-clusterrolebinding-scheduler"
-        sa_name = "airflow-scheduler"
-        cluster_role_binding_scheduler = client.V1ClusterRoleBinding(
-            metadata=client.V1ObjectMeta(name=role_binding_name_scheduler),
-            subjects=[
-                client.V1Subject(
-                    kind="ServiceAccount",
-                    name=sa_name,
-                    namespace="default"
-                )
-            ],
-            role_ref=client.V1RoleRef(
-                kind="ClusterRole",
-                name="cluster-admin",
-                api_group="rbac.authorization.k8s.io"
-            )
-        )
-        console.print('Creating RBAC Scheduler Authorization for local dev')
-        v1.create_cluster_role_binding(cluster_role_binding_scheduler)
-
-        for project_name in local_pieces_respositories.keys():
-            console.log(f"Creating PV and PVC for {project_name}...")
-            # Check if pv already exists
-            persistent_volume_name = 'pv-{}'.format(str(project_name.lower().replace('_', '-')))
-            persistent_volume_claim_name = 'pvc-{}'.format(str(project_name.lower().replace('_', '-')))
-            pvc_exists = False
-            try:
-                k8s_client.read_namespaced_persistent_volume_claim(name=persistent_volume_claim_name, namespace='default')
-                pvc_exists = True
-            except client.rest.ApiException as e:
-                if e.status != 404:
-                    raise e
-
-            if not pvc_exists:
-                pvc = client.V1PersistentVolumeClaim(
-                    metadata=client.V1ObjectMeta(name=persistent_volume_claim_name),
-                    spec=client.V1PersistentVolumeClaimSpec(
-                        access_modes=["ReadOnlyMany"],
-                        volume_name=persistent_volume_name,
-                        resources=client.V1ResourceRequirements(
-                            requests={"storage": "300Mi"}
-                        ),
-                        storage_class_name="standard"
-                    )
-                )
-                k8s_client.create_namespaced_persistent_volume_claim(namespace="default", body=pvc)
-
-            pv_exists = False
-            try:
-                k8s_client.read_persistent_volume(name=persistent_volume_name)
-                pv_exists = True
-            except client.rest.ApiException as e:
-                if e.status != 404:
-                    raise e
-
-            if not pv_exists:
-                pv = client.V1PersistentVolume(
-                    metadata=client.V1ObjectMeta(name=persistent_volume_name),
-                    spec=client.V1PersistentVolumeSpec(
-                        access_modes=["ReadWriteOnce"],
-                        capacity={"storage": "1Gi"},
-                        persistent_volume_reclaim_policy="Retain",
-                        storage_class_name="standard",
-                        host_path=client.V1HostPathVolumeSource(path=f"/pieces_repositories/{project_name}"),
-                        claim_ref=client.V1ObjectReference(
-                            namespace="default",
-                            name=persistent_volume_claim_name,
-                            kind="PersistentVolumeClaim"
-                        ),
-                        node_affinity=client.V1VolumeNodeAffinity(
-                            required=client.V1NodeSelector(
-                                node_selector_terms=[
-                                    client.V1NodeSelectorTerm(
-                                        match_expressions=[
-                                            client.V1NodeSelectorRequirement(
-                                                key="kubernetes.io/hostname",
-                                                operator="In",
-                                                values=["domino-cluster-worker"]
-                                            )
-                                        ]
-                                    )
-                                ]
-                            )
-                        )
-                    )
-                )
-                k8s_client.create_persistent_volume(body=pv)
-
-        if platform_config['dev'].get('DOMINO_LOCAL_DOMINO_PACKAGE'):
-            console.print("Creating PV's and PVC's for Local Domino Package...")
-            # Create pv and pvc for local dev domino
-            pvc = client.V1PersistentVolumeClaim(
-                metadata=client.V1ObjectMeta(name="domino-dev-volume-claim"),
-                spec=client.V1PersistentVolumeClaimSpec(
-                    access_modes=["ReadWriteMany"],
-                    volume_name="domino-dev-volume",
-                    resources=client.V1ResourceRequirements(
-                        requests={"storage": "300Mi"}
-                    ),
-                    storage_class_name="standard"
-                )
-            )
-            k8s_client.create_namespaced_persistent_volume_claim(namespace="default", body=pvc)
-            pv = client.V1PersistentVolume(
-                metadata=client.V1ObjectMeta(name="domino-dev-volume"),
-                spec=client.V1PersistentVolumeSpec(
-                    storage_class_name="standard",
-                    access_modes=["ReadWriteMany"],
-                    capacity={"storage": "2Gi"},
-                    host_path=client.V1HostPathVolumeSource(path="/domino/domino_py/src/domino"),
-                    claim_ref=client.V1ObjectReference(
-                        namespace="default",
-                        name="domino-dev-volume-claim",
-                    ),
-                    node_affinity=client.V1VolumeNodeAffinity(
-                        required=client.V1NodeSelector(
-                            node_selector_terms=[
-                                client.V1NodeSelectorTerm(
-                                    match_expressions=[
-                                        client.V1NodeSelectorRequirement(
-                                            key="kubernetes.io/hostname",
-                                            operator="In",
-                                            values=["domino-cluster-worker"]
-                                        )
-                                    ]
-                                )
-                            ]
-                        )
-                    )
-                )
-            )
-            k8s_client.create_persistent_volume(body=pv)
 
     console.print("")
     console.print("K8s resources created successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
@@ -660,7 +374,6 @@ def destroy_platform() -> None:
 def run_platform_compose(
     github_token: str,
     use_config_file: bool = False,
-    dev: bool = False,
     debug: bool = False
 ) -> None:
     console.print("Starting Domino Platform using Docker Compose.")
@@ -703,20 +416,19 @@ def run_platform_compose(
     airflow_plugins_dir.mkdir(parents=True, exist_ok=True)
     airflow_base.chmod(0o777)
 
-    # Copy docker-compose.yaml file from package to local path
+    # Copy docker-compose.yaml file from deploy/docker to local path
     if create_database:
-        docker_compose_path = Path(__file__).resolve().parent / "docker-compose.yaml"
+        docker_compose_path = Path(__file__).resolve().parent.parent.parent / "deploy" / "docker" / "compose.yaml"
     else:
+        # For production with external database
         docker_compose_path = Path(__file__).resolve().parent / "docker-compose-without-database.yaml"
     shutil.copy(str(docker_compose_path), "./docker-compose.yaml")
 
     # Environment variables
     environment = os.environ.copy()
-    environment['DOMINO_COMPOSE_DEV'] = ''
-    if dev:
-        environment['DOMINO_COMPOSE_DEV'] = '-dev'
+    environment['DOMINO_DEPLOY_MODE'] = 'docker-compose'
 
-    # Run docker compose pull
+    # Run docker compose pull (only for pre-built images, not auto-build)
     console.print("\nPulling Docker images...")
     pull_cmd = [
         "docker",
@@ -728,14 +440,15 @@ def run_platform_compose(
     if pull_process.returncode == 0:
         console.print(" \u2713 Docker images pulled successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
     else:
-        console.print("Docker images pull failed.", style=f"bold {COLOR_PALETTE.get('error')}")
+        console.print("Docker images pull failed. Will attempt build...", style=f"bold {COLOR_PALETTE.get('warning')}")
 
-    # Run docker compose up
+    # Run docker compose up (will build if images not found)
     console.print("\nStarting services...")
     cmd = [
         "docker",
         "compose",
-        "up"
+        "up",
+        "--build"  # Auto-build images if not found
     ]
 
     if debug:
@@ -794,12 +507,15 @@ def run_platform_compose(
 
         def check_domino_processes():
             while True:
-                frontend_response = requests.get("http://localhost:3000").status_code
-                rest_response = requests.get("http://localhost:8000/health-check").status_code
-                if frontend_response == 200 and rest_response == 200:
-                    console.print(" \u2713 Domino REST service started successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
-                    console.print(" \u2713 Domino frontend service started successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
-                    break
+                try:
+                    frontend_response = requests.get("http://localhost:3000").status_code
+                    rest_response = requests.get("http://localhost:8000/health-check").status_code
+                    if frontend_response == 200 and rest_response == 200:
+                        console.print(" \u2713 Domino REST service started successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
+                        console.print(" \u2713 Domino frontend service started successfully!", style=f"bold {COLOR_PALETTE.get('success')}")
+                        break
+                except requests.exceptions.RequestException:
+                    pass
                 time.sleep(5)
 
         for line in process.stdout:
@@ -837,7 +553,6 @@ def stop_platform_compose() -> None:
     if docker_compose_path.exists():
         # Setting this environment variable to empty string just to print cleaner messages to terminal
         environment = os.environ.copy()
-        environment['DOMINO_COMPOSE_DEV'] = ''
         environment['DOMINO_DEFAULT_PIECES_REPOSITORY_TOKEN'] = ''
         environment['AIRFLOW_UID'] = ''
         cmd = [
@@ -846,16 +561,16 @@ def stop_platform_compose() -> None:
             "down"
         ]
         completed_process = subprocess.run(cmd, env=environment)
-        # if completed_process.returncode == 0:
-        #     print("Domino Platform stopped successfully. All containers were removed.")
+        if completed_process.returncode == 0:
+            console.print("\n \u2713 Domino Platform stopped successfully. All containers were removed.\n", style=f"bold {COLOR_PALETTE.get('success')}")
+        return
 
-    # Stop and remove containers by name
+    # Stop and remove containers by name (fallback method)
     def stop_and_remove_container(container_name):
         print(f"Stopping {container_name}...")
         process = subprocess.Popen(f"docker stop {container_name}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         if process.returncode != 0:
-            # print(f"Command failed with error: {stderr.decode()}")
             pass
         else:
             print(stdout.decode())
@@ -864,7 +579,6 @@ def stop_platform_compose() -> None:
         process = subprocess.Popen(f"docker rm {container_name}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         if process.returncode != 0:
-            # print(f"Command failed with error: {stderr.decode()}")
             pass
         else:
             print(stdout.decode())
@@ -875,11 +589,11 @@ def stop_platform_compose() -> None:
             "domino-rest",
             "domino-postgres",
             "domino-docker-proxy",
-            "airflow-domino-scheduler",
-            "airflow-domino-worker",
+            "airflow-scheduler",
+            "airflow-worker",
             "airflow-webserver",
             "airflow-triggerer",
-            "airflow-redis",
+            "domino-redis",
             "airflow-postgres",
             "airflow-flower",
             "airflow-cli",

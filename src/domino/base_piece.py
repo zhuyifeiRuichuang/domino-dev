@@ -202,20 +202,13 @@ class BasePiece(metaclass=abc.ABCMeta):
         if self.deploy_mode in ["local-python"]:
             self.airflow_context['ti'].xcom_push(key=self.task_id, value=xcom_obj)
 
-        elif self.deploy_mode == "local-compose":
+        elif self.deploy_mode in ["host", "docker-compose"]:
             file_path = Path('/airflow/xcom/return.out')
             file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(str(file_path), 'wb') as fp:
                 pickle.dump(xcom_obj, fp)
 
-        elif self.deploy_mode == "local-bash":
-            # For our extended BashOperator, return XCom must be stored in /opt/mnt/fs/tmp/xcom_output.json
-            file_path = Path("/opt/mnt/fs/tmp/xcom_output.json")
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(str(file_path), 'w') as fp:
-                json.dump(xcom_obj, fp, indent=4)
-
-        elif self.deploy_mode in ["k8s", "local-k8s", "local-k8s-dev"]:
+        elif self.deploy_mode == "k8s":
             # In Kubernetes, return XCom must be stored in /airflow/xcom/return.json
             # https://airflow.apache.org/docs/apache-airflow-providers-cncf-kubernetes/stable/pieces.html#how-does-xcom-work
             file_path = Path('/airflow/xcom/return.json')
@@ -273,13 +266,13 @@ class BasePiece(metaclass=abc.ABCMeta):
         # Generate paths
         workflow_run_subpath = os.environ.get('DOMINO_WORKFLOW_RUN_SUBPATH', '')
         self.workflow_shared_storage_path = Path("/home/shared_storage")
-        if self.deploy_mode == 'local-compose':
+        if self.deploy_mode in ['host', 'docker-compose']:
             self.workflow_shared_storage_path = str(self.workflow_shared_storage_path / workflow_run_subpath)
         self.results_path = f"{self.workflow_shared_storage_path}/{self.task_id}/results"
         self.xcom_path = f"{self.workflow_shared_storage_path}/{self.task_id}/xcom"
         self.report_path = f"{self.workflow_shared_storage_path}/{self.task_id}/report"
         shared_storage_source_name = os.environ.get('DOMINO_WORKFLOW_SHARED_STORAGE_SOURCE_NAME', None)
-        if not shared_storage_source_name or shared_storage_source_name == "none" or self.deploy_mode == "local-compose":
+        if not shared_storage_source_name or shared_storage_source_name == "none" or self.deploy_mode in ["host", "docker-compose"]:
             self.generate_paths()
         else:
             self._wait_for_sidecar_paths()

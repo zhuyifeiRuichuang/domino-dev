@@ -1,10 +1,16 @@
 # =============================================================================
-# Domino — 完整生产环境 Docker Compose
+# Domino — 标准生产环境 Docker Compose
 # 包含服务: domino-rest, domino-frontend, domino-postgres,
 #           airflow-postgres, redis, airflow-webserver, airflow-scheduler,
 #           airflow-worker, airflow-triggerer, airflow-init, docker-proxy
 #
-# 快速启动:
+# 部署方式（三种）:
+#   1. 主机环境部署: 直接运行脚本（非容器化）
+#   2. Docker Compose 部署: docker compose up -d
+#   3. Kubernetes 部署: helm install (见 ../k8s/README.md)
+#
+# Docker Compose 快速启动:
+#   cd deploy/docker
 #   cp .env.example .env && vim .env     # 修改密码等敏感配置
 #   docker compose up -d
 #
@@ -13,7 +19,7 @@
 # =============================================================================
 
 # 使用最新 Compose 规范，无需 version 字段
-# （version 字段已在 Compose Spec v2+ 中废弃）
+# 构建上下文为项目根目录 (../..)，支持自动构建镜像
 
 # ── 共享 Airflow 环境变量（YAML 锚点）───────────────────────────────────────
 x-airflow-common:
@@ -38,7 +44,7 @@ x-airflow-common:
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
     AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 15
     # Domino 部署模式
-    DOMINO_DEPLOY_MODE: ${DOMINO_DEPLOY_MODE:-docker-compose}
+    DOMINO_DEPLOY_MODE: docker-compose
   volumes:
     - airflow-dags:/opt/airflow/dags
     - airflow-logs:/opt/airflow/logs
@@ -119,8 +125,8 @@ services:
   domino-rest:
     image: domino-rest:latest
     build:
-      context: ../../rest
-      dockerfile: ../imageBuild/rest/Dockerfile.prod
+      context: ../..
+      dockerfile: imageBuild/rest/Dockerfile.prod
     container_name: domino-rest
     restart: unless-stopped
     ports:
@@ -133,7 +139,7 @@ services:
       DOMINO_DB_PORT: 5432
       DOMINO_DB_NAME: ${DOMINO_DB_NAME:-domino}
       # 部署模式
-      DOMINO_DEPLOY_MODE: ${DOMINO_DEPLOY_MODE:-docker-compose}
+      DOMINO_DEPLOY_MODE: docker-compose
       DOMINO_WORKFLOW_STORAGE_MODE: ${DOMINO_WORKFLOW_STORAGE_MODE:-local}
       # Git 平台（可选）
       DOMINO_WORKFLOWS_GIT_REPO_URL: ${DOMINO_WORKFLOWS_GIT_REPO_URL:-}
@@ -167,8 +173,8 @@ services:
   domino-frontend:
     image: domino-frontend:latest
     build:
-      context: ../../frontend
-      dockerfile: ../imageBuild/frontend/Dockerfile.prod
+      context: ../..
+      dockerfile: imageBuild/frontend/Dockerfile.prod
     container_name: domino-frontend
     restart: unless-stopped
     ports:

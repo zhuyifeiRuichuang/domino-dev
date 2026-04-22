@@ -5,6 +5,18 @@ Helm Chart 源码位于项目根目录 [`helm/domino/`](../../helm/domino/)。
 
 ---
 
+## 部署方式
+
+Domino 支持三种标准部署模式：
+
+| 部署模式 | 说明 |
+|----------|------|
+| **host** | 主机环境部署（直接在宿主机运行 Piece） |
+| **docker-compose** | Docker Compose 部署（单机/本地生产环境） |
+| **k8s** | Kubernetes 部署（集群生产环境） |
+
+---
+
 ## 前置条件
 
 | 工具 | 最低版本 | 说明 |
@@ -142,4 +154,4 @@ kubectl delete pvc --all -n domino
 
 - [`../../helm/domino/`](../../helm/domino/) — Helm Chart 源码
 - [`../../helm/README.md`](../../helm/README.md) — Helm 操作快速参考
-- [`../docker/compose.yaml`](../docker/compose.yaml) — Docker 本地部署
+- [`../docker/compose.yaml`](../docker/compose.yaml) — Docker Compose 部署
