@@ -3,20 +3,21 @@ set -e
 
 # =============================================================================
 # Domino Frontend — 运行时环境变量注入
-# 容器启动时从环境变量读取 API_URL，生成 /usr/share/nginx/html/env.js
-# 这样 compose.yaml 中的 API_URL 环境变量就能真正生效
+# 容器启动时将环境变量内联注入到 index.html
+# 避免外部 JS 加载时序问题
 # =============================================================================
 
-ENV_JS="/usr/share/nginx/html/env.js"
+HTML_FILE="/usr/share/nginx/html/index.html"
+API_URL="${API_URL:-http://localhost:8000}"
+DOMINO_DEPLOY_MODE="${DOMINO_DEPLOY_MODE:-docker-compose}"
 
-cat > "$ENV_JS" << EOF
-// 运行时环境变量 — 由 entrypoint.sh 在容器启动时生成
-window.__DOMINO_ENV__ = {
-  API_URL: "${API_URL:-http://localhost:8000}",
-  DOMINO_DEPLOY_MODE: "${DOMINO_DEPLOY_MODE:-docker-compose}"
-};
-EOF
+# 替换 index.html 中的占位符为实际的环境变量
+# 占位符格式: <!-- __DOMINO_ENV__ -->
+sed -i "s|<!-- __DOMINO_ENV__ -->|<script>window.__DOMINO_ENV__={API_URL:'$API_URL',DOMINO_DEPLOY_MODE:'$DOMINO_DEPLOY_MODE'};</script>|" "$HTML_FILE"
 
-echo "✅ Environment variables injected into env.js:"
-echo "   API_URL = ${API_URL:-http:://localhost:8000}"
-echo "   DOMINO_DEPLOY_MODE = ${DOMINO_DEPLOY_MODE:-docker-compose}"
+echo "✅ Runtime env injected into index.html:"
+echo "   API_URL = $API_URL"
+echo "   DOMINO_DEPLOY_MODE = $DOMINO_DEPLOY_MODE"
+
+# 继续执行 nginx 默认启动逻辑
+exec docker-entrypoint.sh "$@"
