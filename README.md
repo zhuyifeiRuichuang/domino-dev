@@ -1,3 +1,11 @@
+# 注意
+
+本项目基于`https://github.com/Tauffer-Consulting/domino`改造。
+
+
+
+
+
 <p align="center">
   <img src="media/brand/main_logo.png" width="450" title="Domino">
 </p>

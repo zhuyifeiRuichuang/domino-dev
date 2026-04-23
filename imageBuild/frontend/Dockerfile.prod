@@ -65,16 +65,33 @@ COPY frontend/entrypoint.sh /docker-entrypoint.d/40-import-meta-env.sh
 RUN chmod +x /docker-entrypoint.d/40-import-meta-env.sh
 
 # 自定义 nginx 配置（支持 React Router 的 History API）
-RUN printf 'server {\n\
-    listen 80;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    client_max_body_size 50m;\n\
-    # 所有路由回退到 index.html（SPA 支持）\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
-    }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+RUN printf 'server {\
+    listen 80;\
+    root /usr/share/nginx/html;\
+    index index.html;\
+    client_max_body_size 50m;\
+    # 禁用 index.html 缓存（运行时通过 import-meta-env 注入环境变量）\
+    location = /index.html {\
+        add_header Cache-Control "no-cache, no-store, must-revalidate";\
+        add_header Pragma "no-cache";\
+        add_header Expires "0";\
+    }\
+    # 静态资源长期缓存（JS/CSS 带 hash，生产环境可安全缓存）\
+    location ~* \.(js|css)$ {\
+        expires 1y;\
+        add_header Cache-Control "public, immutable";\
+    }\
+    # 图片和其他资源\
+    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {\
+        expires 6m;\
+        add_header Cache-Control "public";\
+    }\
+    # 所有路由回退到 index.html（SPA 支持）\
+    location / {\
+        try_files $uri $uri/ /index.html;\
+    }\
+}\
+' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

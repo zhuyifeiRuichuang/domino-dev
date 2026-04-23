@@ -135,16 +135,16 @@ Piece 镜像用于 **Airflow Worker 运行单个 Piece 任务**，与 Airflow �
 
 ```bash
 # CPU 生产镜像
-docker build -f imageBuild/piece/Dockerfile.prod -t domino-piece:latest .
+docker build -f imageBuild/piece/Dockerfile.prod -t zhuyifeiruichuang/domino-piece:prod .
 
 # CPU 开发镜像
-docker build -f imageBuild/piece/Dockerfile.dev -t domino-piece:dev .
+docker build -f imageBuild/piece/Dockerfile.dev -t zhuyifeiruichuang/domino-piece:dev .
 
 # GPU 生产镜像（需要 NVIDIA Container Toolkit）
-docker build -f imageBuild/piece/Dockerfile.gpu-prod -t domino-piece:latest-gpu .
+docker build -f imageBuild/piece/Dockerfile.gpu-prod -t zhuyifeiruichuang/domino-piece:latest-gpu .
 
 # GPU 开发镜像
-docker build -f imageBuild/piece/Dockerfile.gpu-dev -t domino-piece:dev-gpu .
+docker build -f imageBuild/piece/Dockerfile.gpu-dev -t zhuyifeiruichuang/domino-piece:dev-gpu .
 ```
 
 ---
