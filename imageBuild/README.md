@@ -93,7 +93,7 @@ docker build -f imageBuild/rest/Dockerfile.dev -t zhuyifeiruichuang/domino-rest:
 
 | 文件 | 基础镜像 | 用途 |
 :|------|----------|------|
-| `Dockerfile.prod` | `node:20-alpine` → `nginx:1.27-alpine` | 多阶段构建，打包后用 nginx 提供静态文件 |
+| `Dockerfile.prod` | `node:20-alpine` → `nginx:1.30.0` | 多阶段构建，打包后用 nginx 提供静态文件 |
 | `Dockerfile.dev`  | `node:20-alpine` | Vite dev server，支持 HMR 热更新 |
 
 **构建命令（从项目根目录执行）：**

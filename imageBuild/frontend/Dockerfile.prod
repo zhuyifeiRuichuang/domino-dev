@@ -1,6 +1,6 @@
 # =============================================================================
 # Domino Frontend 生产镜像
-# 基础镜像: node:20-alpine → nginx:1.27-alpine（多阶段构建）
+# 基础镜像: node:20-alpine → nginx:1.30.0（多阶段构建）
 # 用途: domino-frontend 静态文件服务
 # 特点: API_URL 支持运行时注入（通过环境变量，entrypoint.sh 内联注入）
 # =============================================================================
@@ -42,7 +42,7 @@ RUN apk add --no-cache curl \
 RUN pnpm build
 
 # ---- 运行阶段 ----
-FROM nginx:1.27-alpine
+FROM nginx:1.30.0
 
 LABEL description="Domino Frontend — production static files served by nginx"
 
