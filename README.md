@@ -105,6 +105,12 @@ The Domino frontend service is a React application that provides the GUI for eas
   </summary>
   Sign up and login to use the Domino platform. <br></br>
 
+  **Default credentials** (for first-time login):
+  - Email: `admin@email.com`
+  - Password: `admin`
+
+  > **Security Notice**: Change the default password after first login, especially in production environments.
+
   ![signup and login](https://raw.githubusercontent.com/Tauffer-Consulting/domino-docs/main/static/img/quickstart/signin.gif)
 
 </details>
