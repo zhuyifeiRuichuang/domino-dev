@@ -33,6 +33,7 @@ COPY frontend/package.json ./
 COPY frontend/vite.config.ts ./
 COPY frontend/tsconfig.json ./
 COPY frontend/scripts ./scripts
+COPY frontend/.env.production ./.env.production
 # 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
