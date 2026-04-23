@@ -2,6 +2,7 @@
 # Domino Frontend 生产镜像
 # 基础镜像: node:20-alpine → nginx:1.27-alpine（多阶段构建）
 # 用途: domino-frontend 静态文件服务
+# 特点: API_URL 支持运行时注入（通过环境变量）
 # =============================================================================
 
 # ---- 构建阶段 ----
@@ -22,10 +23,10 @@ RUN corepack enable \
 COPY frontend/src ./src
 COPY frontend/public ./public
 COPY frontend/fonts ./fonts
-COPY frontend/index.html ./
-COPY frontend/package.json ./
-COPY frontend/vite.config.ts ./
-COPY frontend/tsconfig.json ./
+COPY frontend/index.html ./index.html
+COPY frontend/package.json ./package.json
+COPY frontend/vite.config.ts ./vite.config.ts
+COPY frontend/tsconfig.json ./tsconfig.json
 COPY frontend/scripts ./scripts
 COPY frontend/.env.production ./.env.production
 
@@ -37,7 +38,7 @@ RUN apk add --no-cache curl \
     && chmod +x scripts/fetch-workflow-examples.sh \
     && sh scripts/fetch-workflow-examples.sh
 
-# Vite 构建（使用 DefinePlugin 注入环境变量）
+# Vite 构建（使用 DefinePlugin 注入环境变量作为回退默认值）
 RUN pnpm build
 
 # ---- 运行阶段 ----
@@ -48,26 +49,38 @@ LABEL description="Domino Frontend — production static files served by nginx"
 # 清理默认内容
 RUN rm -rf /usr/share/nginx/html/*
 
-# 复制构建产物
+# 复制构建产物（Vite 输出到 /build/frontend/build）
 COPY --from=builder /build/frontend/build /usr/share/nginx/html
 
-# 复制启动脚本
-COPY frontend/entrypoint.sh /docker-entrypoint.d/30-startup.sh
-RUN chmod +x /docker-entrypoint.d/30-startup.sh
+# 复制运行时注入脚本（容器启动时生成 env.js）
+COPY frontend/entrypoint.sh /docker-entrypoint.d/30-env-injection.sh
+RUN chmod +x /docker-entrypoint.d/30-env-injection.sh
 
-# 自定义 nginx 配置（支持 React Router 的 History API）
+# 自定义 nginx 配置
 RUN printf 'server {\
     listen 80;\
     root /usr/share/nginx/html;\
     index index.html;\
     client_max_body_size 50m;\
-    # 静态资源长期缓存（JS/CSS 带 hash，生产环境可安全缓存）\
-    location ~* \.(js|css)$ {\
+    # 禁用 index.html 缓存（每次都应获取最新）\
+    location = /index.html {\
+        add_header Cache-Control "no-cache, no-store, must-revalidate";\
+        add_header Pragma "no-cache";\
+        add_header Expires "0";\
+    }\
+    # env.js 也不缓存（包含动态 API_URL）\
+    location = /env.js {\
+        add_header Cache-Control "no-cache, no-store, must-revalidate";\
+        add_header Pragma "no-cache";\
+        add_header Expires "0";\
+    }\
+    # 静态资源长期缓存（JS/CSS 带 hash，内容不变 URL 就变）\
+    location ~* \\.(js|css)$ {\
         expires 1y;\
         add_header Cache-Control "public, immutable";\
     }\
     # 图片和其他资源\
-    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {\
+    location ~* \\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {\
         expires 6m;\
         add_header Cache-Control "public";\
     }\
