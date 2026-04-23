@@ -9,12 +9,10 @@ FROM node:20-alpine AS builder
 
 LABEL maintainer="Domino Team"
 
-WORKDIR /build
+# 在 frontend 子目录中构建，保持所有路径原样
+WORKDIR /build/frontend
 
 # 先安装依赖（利用缓存层）
-# 使用 --no-frozen-lockfile 以兼容 package.json 与 pnpm-lock.yaml 版本不同步的情况；
-# 如需严格锁定版本，请先在本地运行 `pnpm install` 更新 pnpm-lock.yaml 后再构建。
-# 构建上下文为项目根目录，需要指定 frontend/ 子目录
 COPY frontend/package.json frontend/pnpm-lock.yaml* frontend/package-lock.json* frontend/yarn.lock* ./
 RUN corepack enable \
     && corepack prepare pnpm@latest --activate \
@@ -25,7 +23,6 @@ RUN npx pkg ./node_modules/@import-meta-env/cli/bin/import-meta-env.js \
     -o import-meta-env -t node18-alpine-x64 -y
 
 # 复制源码并构建
-# 构建上下文为项目根目录，需要指定 frontend/ 子目录
 COPY frontend/src ./src
 COPY frontend/public ./public
 COPY frontend/index.html ./
@@ -34,15 +31,16 @@ COPY frontend/vite.config.ts ./
 COPY frontend/tsconfig.json ./
 COPY frontend/scripts ./scripts
 COPY frontend/.env.production ./.env.production
+
 # 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # 在构建阶段下载工作流示例数据到 public/ 目录
-# Vite 构建时会自动将 public/ 下的静态文件复制到输出目录
 RUN apk add --no-cache curl \
     && chmod +x scripts/fetch-workflow-examples.sh \
     && sh scripts/fetch-workflow-examples.sh
 
+# Vite 构建：outDir 为 build，构建产物会在 /build/frontend/build
 RUN pnpm build
 
 # ---- 运行阶段 ----
@@ -57,10 +55,10 @@ RUN apk add --no-cache jq
 RUN rm -rf /usr/share/nginx/html/*
 
 # 复制构建产物和 import-meta-env CLI
-COPY --from=builder /build/build /usr/share/nginx/html
-COPY --from=builder /build/import-meta-env /usr/share/nginx/html/
+COPY --from=builder /build/frontend/build /usr/share/nginx/html
+COPY --from=builder /build/frontend/import-meta-env /usr/share/nginx/html/
 
-# 复制启动脚本（构建上下文为项目根目录）
+# 复制启动脚本
 COPY frontend/entrypoint.sh /docker-entrypoint.d/40-import-meta-env.sh
 RUN chmod +x /docker-entrypoint.d/40-import-meta-env.sh
 
