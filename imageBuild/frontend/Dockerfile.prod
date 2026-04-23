@@ -31,6 +31,8 @@ COPY frontend/vite.config.ts ./
 COPY frontend/tsconfig.json ./
 COPY frontend/scripts ./scripts
 COPY frontend/.env.production ./.env.production
+# 字体文件：复制到构建根目录，使 CSS 中的 ../fonts/ 路径正确解析
+COPY frontend/fonts ./fonts
 
 # 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
 ENV NODE_OPTIONS="--max-old-space-size=4096"
