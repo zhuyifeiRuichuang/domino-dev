@@ -9,7 +9,7 @@ FROM node:20-alpine AS builder
 
 LABEL maintainer="Domino Team"
 
-# 在 frontend 子目录中构建，保持所有路径原样
+# 在 frontend 子目录中构建
 WORKDIR /build/frontend
 
 # 先安装依赖（利用缓存层）
@@ -18,21 +18,16 @@ RUN corepack enable \
     && corepack prepare pnpm@latest --activate \
     && pnpm install --no-frozen-lockfile
 
-# 编译 import-meta-env CLI（用于运行时注入环境变量到 index.html）
-RUN npx pkg ./node_modules/@import-meta-env/cli/bin/import-meta-env.js \
-    -o import-meta-env -t node18-alpine-x64 -y
-
 # 复制源码并构建
 COPY frontend/src ./src
 COPY frontend/public ./public
+COPY frontend/fonts ./fonts
 COPY frontend/index.html ./
 COPY frontend/package.json ./
 COPY frontend/vite.config.ts ./
 COPY frontend/tsconfig.json ./
 COPY frontend/scripts ./scripts
 COPY frontend/.env.production ./.env.production
-# 字体文件：复制到构建根目录，使 CSS 中的 ../fonts/ 路径正确解析
-COPY frontend/fonts ./fonts
 
 # 增大 Node.js 堆内存限制，避免 Vite 打包 13000+ 模块时 OOM
 ENV NODE_OPTIONS="--max-old-space-size=4096"
@@ -42,7 +37,7 @@ RUN apk add --no-cache curl \
     && chmod +x scripts/fetch-workflow-examples.sh \
     && sh scripts/fetch-workflow-examples.sh
 
-# Vite 构建：outDir 为 build，构建产物会在 /build/frontend/build
+# Vite 构建（使用 DefinePlugin 注入环境变量）
 RUN pnpm build
 
 # ---- 运行阶段 ----
@@ -50,19 +45,15 @@ FROM nginx:1.27-alpine
 
 LABEL description="Domino Frontend — production static files served by nginx"
 
-# 安装依赖（运行时环境变量注入需要 jq）
-RUN apk add --no-cache jq
-
 # 清理默认内容
 RUN rm -rf /usr/share/nginx/html/*
 
-# 复制构建产物和 import-meta-env CLI
+# 复制构建产物
 COPY --from=builder /build/frontend/build /usr/share/nginx/html
-COPY --from=builder /build/frontend/import-meta-env /usr/share/nginx/html/
 
 # 复制启动脚本
-COPY frontend/entrypoint.sh /docker-entrypoint.d/40-import-meta-env.sh
-RUN chmod +x /docker-entrypoint.d/40-import-meta-env.sh
+COPY frontend/entrypoint.sh /docker-entrypoint.d/30-startup.sh
+RUN chmod +x /docker-entrypoint.d/30-startup.sh
 
 # 自定义 nginx 配置（支持 React Router 的 History API）
 RUN printf 'server {\
@@ -70,12 +61,6 @@ RUN printf 'server {\
     root /usr/share/nginx/html;\
     index index.html;\
     client_max_body_size 50m;\
-    # 禁用 index.html 缓存（运行时通过 import-meta-env 注入环境变量）\
-    location = /index.html {\
-        add_header Cache-Control "no-cache, no-store, must-revalidate";\
-        add_header Pragma "no-cache";\
-        add_header Expires "0";\
-    }\
     # 静态资源长期缓存（JS/CSS 带 hash，生产环境可安全缓存）\
     location ~* \.(js|css)$ {\
         expires 1y;\
